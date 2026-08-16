@@ -24,7 +24,7 @@ The assignment requires a minimum of 500 instances and 12 features, which this d
 
 ## 3. GitHub Repository Link
 
-https://github.com/bit-static/breast-cancer-ml-classification/tree/main
+**Add your GitHub repository URL here after creating the repository.**
 
 ## 4. Models Used
 
