@@ -48,9 +48,12 @@ with st.sidebar:
     st.caption("The uploaded CSV should contain the 30 feature columns and a Diagnosis column.")
     st.caption("Diagnosis: 1 = Malignant, 0 = Benign")
 
-if uploaded_file is None:
-    st.info("Upload the supplied test_data.csv file to evaluate the selected model.")
-    st.stop()
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+    data_source = "Uploaded CSV"
+else:
+    df = pd.read_csv("test_data.csv")
+    data_source = "Default test_data.csv"
 
 df = pd.read_csv(uploaded_file)
 
