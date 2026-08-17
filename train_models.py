@@ -1,26 +1,11 @@
-"""
-Breast Cancer Classification - Model Training Script
-
-This script:
-1. Loads the Breast Cancer Wisconsin Diagnostic dataset.
-2. Creates a stratified 80:20 train-test split.
-3. Trains six classification models.
-4. Evaluates each model using Accuracy, AUC, Precision, Recall, F1 and MCC.
-5. Saves the trained models in the model/ directory.
-6. Saves the held-out test data and model results for the Streamlit app.
-
-Run:
-    python train_models.py
-"""
+# train_models.py
 
 import os
 import pickle
-import pandas as pd
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -29,166 +14,153 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 
-from sklearn.metrics import (
-    accuracy_score,
-    roc_auc_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    matthews_corrcoef,
-)
-
 
 # ---------------------------------------------------------
 # Paths
 # ---------------------------------------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "model")
+
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 
 # ---------------------------------------------------------
-# Load dataset
+# Load Breast Cancer Wisconsin Dataset
 # ---------------------------------------------------------
+
 data = load_breast_cancer()
 
-X = pd.DataFrame(data.data, columns=data.feature_names)
+X = data.data
+y = data.target
 
-# sklearn's breast cancer dataset uses:
-# 0 = malignant, 1 = benign
+# sklearn dataset:
+# 0 = malignant
+# 1 = benign
+#
 # Assignment requirement:
-# 1 = malignant, 0 = benign
-y = pd.Series((data.target == 0).astype(int), name="target")
+# 1 = malignant
+# 0 = benign
+y = 1 - y
 
 
 # ---------------------------------------------------------
-# Train-test split
+# Train-Test Split
 # ---------------------------------------------------------
+
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
     test_size=0.20,
-    stratify=y,
-    random_state=42
+    random_state=42,
+    stratify=y
 )
 
 
 # ---------------------------------------------------------
-# Models
-#
-# Pipelines are used for models that require scaling.
-# This keeps preprocessing together with the model and
-# avoids having to separately save a scaler.
+# Feature Scaling
 # ---------------------------------------------------------
+
+scaler = StandardScaler()
+
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+
+# ---------------------------------------------------------
+# Define sklearn Models
+# ---------------------------------------------------------
+
 models = {
-    "logistic_regression": Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", LogisticRegression(max_iter=5000, random_state=42))
-    ]),
+
+    "logistic_regression": LogisticRegression(
+        max_iter=5000,
+        random_state=42
+    ),
 
     "decision_tree": DecisionTreeClassifier(
         max_depth=5,
         random_state=42
     ),
 
-    "knn": Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", KNeighborsClassifier(n_neighbors=7))
-    ]),
+    "knn": KNeighborsClassifier(
+        n_neighbors=7
+    ),
 
-    "naive_bayes": Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", GaussianNB())
-    ]),
+    "naive_bayes": GaussianNB(),
 
     "random_forest": RandomForestClassifier(
         n_estimators=300,
         random_state=42
     ),
 
-    "svm": Pipeline([
-        ("scaler", StandardScaler()),
-        ("model", SVC(
-            kernel="rbf",
-            probability=True,
-            random_state=42
-        ))
-    ])
+    "svm": SVC(
+        kernel="rbf",
+        probability=True,
+        random_state=42
+    )
 }
 
 
 # ---------------------------------------------------------
-# Train, evaluate and save models
+# Train Models and Save as Pickle Files
 # ---------------------------------------------------------
-results = []
 
 for model_name, model in models.items():
 
-    print(f"\nTraining {model_name}...")
+    print(f"Training {model_name}...")
 
-    model.fit(X_train, y_train)
+    # Models that require feature scaling
+    if model_name in [
+        "logistic_regression",
+        "knn",
+        "naive_bayes",
+        "svm"
+    ]:
+        model.fit(X_train_scaled, y_train)
+    else:
+        model.fit(X_train, y_train)
 
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-
-    result = {
-        "ML Model Name": model_name,
-        "Accuracy": accuracy_score(y_test, y_pred),
-        "AUC": roc_auc_score(y_test, y_prob),
-        "Precision": precision_score(y_test, y_pred, zero_division=0),
-        "Recall": recall_score(y_test, y_pred, zero_division=0),
-        "F1": f1_score(y_test, y_pred, zero_division=0),
-        "MCC": matthews_corrcoef(y_test, y_pred),
-    }
-
-    results.append(result)
-
-    model_path = os.path.join(MODEL_DIR, f"{model_name}.pkl")
+    # Save trained sklearn model
+    model_path = os.path.join(
+        MODEL_DIR,
+        f"{model_name}.pkl"
+    )
 
     with open(model_path, "wb") as file:
         pickle.dump(model, file)
 
-    print(f"Saved model: {model_path}")
+    print(f"Saved -> {model_path}")
 
 
 # ---------------------------------------------------------
-# Save model evaluation results
+# Save Test Data
 # ---------------------------------------------------------
-results_df = pd.DataFrame(results)
-results_df.to_csv(
-    os.path.join(BASE_DIR, "model_results.csv"),
+
+# Save original, unscaled test features.
+# app.py can apply scaling when required.
+test_data_path = os.path.join(
+    BASE_DIR,
+    "test_data.csv"
+)
+
+import pandas as pd
+
+test_df = pd.DataFrame(
+    X_test,
+    columns=data.feature_names
+)
+
+test_df["target"] = y_test
+
+test_df.to_csv(
+    test_data_path,
     index=False
 )
 
 
-# ---------------------------------------------------------
-# Save held-out test data
-# ---------------------------------------------------------
-test_data = X_test.copy()
-test_data["target"] = y_test.values
-
-test_data.to_csv(
-    os.path.join(BASE_DIR, "test_data.csv"),
-    index=False
-)
-
-
-# ---------------------------------------------------------
-# Save feature names
-# ---------------------------------------------------------
-with open(os.path.join(BASE_DIR, "feature_names.txt"), "w") as file:
-    for feature in data.feature_names:
-        file.write(feature + "\n")
-
-
-# ---------------------------------------------------------
-# Print final results
-# ---------------------------------------------------------
-print("\nModel Evaluation Results")
-print("=" * 80)
-print(results_df.to_string(index=False))
-
-print("\nTraining completed successfully.")
+print("\n-----------------------------------------")
+print("Training completed successfully.")
+print("-----------------------------------------")
 print(f"Models saved in: {MODEL_DIR}")
-print(f"Results saved in: {os.path.join(BASE_DIR, 'model_results.csv')}")
-print(f"Test data saved in: {os.path.join(BASE_DIR, 'test_data.csv')}")
+print(f"Test data saved at: {test_data_path}")
